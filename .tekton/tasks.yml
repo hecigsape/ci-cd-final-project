@@ -3,7 +3,7 @@ kind: Task
 metadata:
   name: cleanup
 spec:
-  description: This task will clean up a workspace by deleting all of the files and then run unit tests.
+  description: This task will clean up a workspace by deleting all of the files.
   workspaces:
     - name: source
   steps:
@@ -26,12 +26,35 @@ spec:
           rm -rf "${WORKSPACE_SOURCE_PATH}"/..?*
         fi
 
-    - name: run-unit-tests
-      image: python:3.8  # Se debe especificar una imagen de Python para ejecutar Nose
-      workingDir: $(workspaces.source.path)
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: nose
+spec:
+  description: "Run unit tests using Nose."
+  workspaces:
+    - name: source  # 🔹 Se agrega el workspace para acceder a los archivos
+  params:
+    - name: args
+      description: Arguments to pass to nose
+      type: string
+      default: "-v"
+
+  steps:
+    - name: nosetests
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)  # 🔹 Se asegura de ejecutar en el workspace
       script: |
-        #!/usr/bin/env sh
-        set -eu
-        pip install --upgrade pip
-        pip install -r requirements.txt
-        nosetests -v --with-spec --spec-color --with-coverage --cover-package=app
+        #!/bin/bash
+        set -e
+        echo "Installing dependencies..."
+        python -m pip install --upgrade pip wheel
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        else
+          echo "⚠️ WARNING: requirements.txt not found, skipping dependency installation."
+        fi
+
+        echo "Running nosetests..."
+        nosetests $(params.args)
